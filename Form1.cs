@@ -1,245 +1,370 @@
 using System;
+
+using System.Collections.Generic;
+
 using System.Data.SQLite;
-using System.Drawing.Text;
-using System.Globalization;
+
 using System.IO;
+
 using System.Linq;
+
+using System.Threading.Tasks;
+
 using System.Windows.Forms;
+
 using QuestPDF.Fluent;
+
 using QuestPDF.Helpers;
+
 using QuestPDF.Infrastructure;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using static OpenTK.Graphics.OpenGL.GL;
-using static SkiaSharp.HarfBuzz.SKShaper;
+
 namespace Estudo_Instramed43
+
 {
+
     public partial class Form1 : Form
+
     {
-        //coloquei variavel global
-        string path = @"C:\Users\Douglas.beccari\OneDrive - Strattner\¡rea de Trabalho\Instramed_Estudo_C#\Estudo_Instramed43 Gr·ficoWalterFuncionando\DataCorreto.csv";
+
+        // Vari√°veis globais
+
+        string path = @"C:\Users\Douglas.beccari\OneDrive - Strattner\√Årea de Trabalho\Instramed_Estudo_C#\Estudo_Instramed43 Gr√°ficoWalterFuncionando\DataCorreto.csv";
+
         int numeroTimer = 0;
 
+        // Dados globais para gr√°fico em tempo real
+
+        List<double> dadosV = new List<double>();
+
+        List<double> dadosW = new List<double>();
+
+        List<double> dadosY = new List<double>();
+
+        List<double> dadosZ = new List<double>();
+
+        List<double> dadosX = new List<double>();
+
+        int indiceAtual = 0;
+
+        System.Windows.Forms.Timer timerDados = new System.Windows.Forms.Timer();
+
         public Form1()
+
         {
+
             InitializeComponent();
+
         }
 
         private void formsPlot1_Load(object sender, EventArgs e)
+
         {
+
         }
 
         public async Task calcularGraficos()
+
         {
+
             int janela = Convert.ToInt32(TxtJanela.Text);
+
             int passos = Convert.ToInt32(TxtPassos.Text);
 
-            if (File.Exists(path))
+            if (!File.Exists(path))
+
             {
-                if (janela <= passos)
-                {
-                    MessageBox.Show("N„o pode ser maior ou igual ao n˙mero de janelas.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
 
-                List<double> dataV = new List<double>();
-                List<double> dataW = new List<double>();
-                List<double> dataX = new List<double>();
-                List<double> dataY = new List<double>();
-                List<double> dataZ = new List<double>();
-                List<int> numeros = new List<int>();
+                Lb1.Text = "Arquivo n√£o encontrado.";
 
-                await Task.Run(() =>
-                {
-                    string[] linhas = File.ReadAllLines(path);
+                formsPlot1.Enabled = false;
 
-                    //vou colocar a migraÁ„o para o sqlite aqui
-                    string dbPath = @"Data Source=C:\Users\Douglas.beccari\OneDrive - Strattner\¡rea de Trabalho\Instramed_Estudo_C#\Estudo_Instramed43 Gr·ficoWalterFuncionando\bancoValores.db";
+                return;
 
-                    try
-                    {
-                        using (var connection = new SQLiteConnection(dbPath))
-                        {
-                            connection.Open();
+            }
 
-                            using (var transaction = connection.BeginTransaction())
-                            {
-                                foreach (string linha in linhas)
-                                {
-                                    string[] data = linha.Split(';');
+            if (janela <= passos)
 
-                                    if (data.Length > 0 && int.TryParse(data[2], out int numero)) //int.TryParse tenta converter o que ta na posiÁao 2 do array data pra int, se conseguir ele joga na variavel numero usar ele no lugar do convert
-                                    {
-                                        dataV.Add(numero);
-                                        numeros.Add(numero);
+            {
 
-                                        string sql = "INSERT INTO Valores (Numero) VALUES (@numero)";
-                                        using (var command = new SQLiteCommand(sql, connection))
-                                        {
-                                            command.Parameters.AddWithValue("@numero", numero);
-                                            command.ExecuteNonQuery();
-                                        }
-                                    }
-                                }
-                                transaction.Commit();
-                            }
-                            MessageBox.Show("Banco de dados alimentado com sucesso!");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("Erro ao alimentar o banco de dados: " + ex.Message);
-                        return;
-                    }
+                MessageBox.Show("N√£o pode ser maior ou igual ao n√∫mero de janelas.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
+                return;
 
-                    int cortar = dataV.Count - (dataV.Count / passos); //corta de acordo com o passos e imprimi igual os outros datas
-                    dataV = dataV.Take(cortar).ToList();
-                    //aqui È um exemplo do take:
-                    //var lista = new List<int> { 1, 2, 3, 4, 5 };
-                    //var metade = lista.Take(3).ToList(); //resultado: [1, 2, 3]
+            }
 
+            List<int> numeros = new List<int>();
 
-                    for (int i = 0; (i + janela) <= numeros.Count; i += passos)
-                    {
-                        double soma = 0;
-                        double elevados = 0;
+            dadosV.Clear(); dadosW.Clear(); dadosY.Clear(); dadosZ.Clear(); dadosX.Clear();
 
-                        int[] a = new int[janela];
+            indiceAtual = 0;
 
-                        for (int j = 0; j < janela; j++)
-                        {
-                            a[j] = numeros[i + j];
-                            soma = soma + a[j]; //aqui junta os valores de: a0, a1, a2, a3 para fazer a mÈdia
-                        }
+            await Task.Run(() =>
 
+            {
 
-                        //mÈdia comum
-                        double media = soma / janela;
+                string[] linhas = File.ReadAllLines(path);
 
+                //banco de dados sqlite
 
-                        //desvio padr„o
-                        elevados += Math.Pow(media, 2);
-                        double desvioPadrao = Math.Sqrt(elevados / janela);
-
-
-                        //variante 
-                        double variante = elevados / janela;
-
-
-                        //adicionando os pontos no grafico
-                        dataY.Add(media / 1.7);
-                        dataW.Add(desvioPadrao);
-                        dataZ.Add(variante / 1000000);
-                    }
-
-                    for (int k = 0; k < numeros.Count; k++) //aqui precisa imprimir no grafico os numeros de 0 atÈ o ultimo pro grafico ficar intendivel
-                    {
-                        dataX.Add(k);
-                    }
-                });
-
-                Lb1.Text = string.Join(" | ", numeros);
-
-                formsPlot1.Plot.Clear();
-                formsPlot1.Plot.Title("MÈdia por Janela");
-                formsPlot1.Plot.XLabel("Numeros");
-                formsPlot1.Plot.YLabel("MÈdia");
-                formsPlot1.Plot.Add.Scatter(dataX, dataV);
-                formsPlot1.Plot.Add.Scatter(dataX, dataW);
-                formsPlot1.Plot.Add.Scatter(dataX, dataY);
-                formsPlot1.Plot.Add.Scatter(dataX, dataZ);
-                formsPlot1.Enabled = false; //desabilita o zoom
-                formsPlot1.Plot.Axes.AutoScale(); //faz o grafico se ajustar ao tamanho dos dados
-
-
-                //vou colocar a migraÁ„o do Questpdf aqui
+                string dbPath = @"Data Source=C:\Users\Douglas.beccari\OneDrive - Strattner\√Årea de Trabalho\Instramed_Estudo_C#\Estudo_Instramed43 Gr√°ficoWalterFuncionando\bancoValores.db";
 
                 try
+
                 {
-                    QuestPDF.Settings.License = LicenseType.Community;
 
-                    var document = Document.Create(container =>
+                    using (var connection = new SQLiteConnection(dbPath))
+
                     {
-                        container.Page(page =>
+
+                        connection.Open();
+
+                        using (var transaction = connection.BeginTransaction())
+
                         {
-                            page.Size(PageSizes.A4);
-                            page.Margin(2, Unit.Centimetre);
 
-                            page.Content().Table(table =>
+                            foreach (string linha in linhas)
+
                             {
-                                table.ColumnsDefinition(columns =>
-                                {
-                                    columns.ConstantColumn(80);
-                                });
 
-                                //Lb1.Text = string.Join(" ", numeros);
-                                table.Cell().Padding(5).Text(Lb1.Text);
+                                string[] data = linha.Split(';');
+
+                                if (data.Length > 2 && int.TryParse(data[2], out int numero))
+
+                                {
+
+                                    dadosV.Add(numero);
+
+                                    numeros.Add(numero);
+
+                                    string sql = "INSERT INTO Valores (Numero) VALUES (@numero)";
+
+                                    using (var command = new SQLiteCommand(sql, connection))
+
+                                    {
+
+                                        command.Parameters.AddWithValue("@numero", numero);
+
+                                        command.ExecuteNonQuery();
+
+                                    }
+
+                                }
+
+                            }
+
+                            transaction.Commit();
+
+                        }
+
+                    }
+
+                    MessageBox.Show("Banco de dados alimentado com sucesso!");
+
+                }
+
+                catch (Exception ex)
+
+                {
+
+                    MessageBox.Show("Erro ao alimentar o banco de dados: " + ex.Message);
+
+                    return;
+
+                }
+
+                int cortar = dadosV.Count - (dadosV.Count / passos);
+
+                dadosV = dadosV.Take(cortar).ToList();
+
+                for (int i = 0; (i + janela) <= numeros.Count; i += passos)
+
+                {
+
+                    double soma = 0;
+
+                    double elevados = 0;
+
+                    int[] a = new int[janela];
+
+                    for (int j = 0; j < janela; j++)
+
+                    {
+
+                        a[j] = numeros[i + j];
+
+                        soma += a[j];
+
+                    }
+
+                    double media = soma / janela;
+
+                    elevados += Math.Pow(media, 2);
+
+                    double desvioPadrao = Math.Sqrt(elevados / janela);
+
+                    double variante = elevados / janela;
+
+                    dadosY.Add(media / 1.7);
+
+                    dadosW.Add(desvioPadrao);
+
+                    dadosZ.Add(variante / 1000000);
+
+                }
+
+                for (int k = 0; k < numeros.Count; k++)
+
+                    dadosX.Add(k);
+
+            });
+
+            Lb1.Text = string.Join(" | ", numeros);
+
+            // Inicia timer de atualiza√ß√£o do gr√°fico em "tempo real"
+
+            formsPlot1.Plot.Clear();
+
+            timerDados.Interval = 25; // 1 segundo
+
+            timerDados.Tick -= TimerDados_Tick;
+
+            timerDados.Tick += TimerDados_Tick;
+
+            timerDados.Start();
+
+        }
+
+        private void TimerDados_Tick(object sender, EventArgs e)
+
+        {
+
+            int pontosPorSegundo = 1;
+
+            int limite = Math.Min(indiceAtual + pontosPorSegundo, dadosV.Count);
+
+            formsPlot1.Plot.Clear();
+
+            formsPlot1.Plot.Add.Scatter(dadosX.Take(limite).ToArray(), dadosV.Take(limite).ToArray());
+
+            formsPlot1.Plot.Add.Scatter(dadosX.Take(limite).ToArray(), dadosW.Take(limite).ToArray());
+
+            formsPlot1.Plot.Add.Scatter(dadosX.Take(limite).ToArray(), dadosY.Take(limite).ToArray());
+
+            formsPlot1.Plot.Add.Scatter(dadosX.Take(limite).ToArray(), dadosZ.Take(limite).ToArray());
+
+            formsPlot1.Plot.Axes.AutoScale();
+
+            formsPlot1.Refresh();
+
+            indiceAtual = limite;
+
+            if (indiceAtual >= dadosV.Count)
+
+            {
+
+                timerDados.Stop();
+
+                SendPdf();
+
+            }
+
+        }
+
+        private void SendPdf()
+
+        {
+            //vou colocar a migra√ß√£o do Questpdf aqui
+
+            try
+            {
+                QuestPDF.Settings.License = LicenseType.Community;
+
+                var document = Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4);
+                        page.Margin(2, Unit.Centimetre);
+
+                        page.Content().Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.ConstantColumn(80);
                             });
+
+                            //Lb1.Text = string.Join(" ", numeros);
+                            table.Cell().Padding(5).Text(Lb1.Text);
                         });
                     });
+                });
 
-                    string pathPdf = @"C:\Users\Douglas.beccari\OneDrive - Strattner\¡rea de Trabalho\Instramed_Estudo_C#\Estudo_Instramed43 Gr·ficoWalterFuncionando\relatorio.pdf";
+                string pathPdf = @"C:\Users\Douglas.beccari\OneDrive - Strattner\√Årea de Trabalho\Instramed_Estudo_C#\Estudo_Instramed43 Gr√°ficoWalterFuncionando\relatorio.pdf";
 
-                    document.GeneratePdf(pathPdf);
+                document.GeneratePdf(pathPdf);
 
-                    MessageBox.Show("PDF gerado com sucesso!");
-                }
-                catch (Exception)
-                {
-                    MessageBox.Show("Erro ao gerar PDF:\n");
-                }
+                MessageBox.Show("PDF gerado com sucesso!");
             }
-
-            else
+            catch (Exception)
             {
-                Lb1.Text = "Arquivo n„o encontrado.";
-                formsPlot1.Enabled = false;
-                formsPlot1.Plot.Axes.AutoScale();
+                MessageBox.Show("Erro ao gerar PDF:\n");
             }
+
         }
 
         private async void BtEnviar_Click(object sender, EventArgs e)
+
         {
             await calcularGraficos();
-            formsPlot1.Refresh();
-        }
-
-        private void Lb3_Click(object sender, EventArgs e)
-        {
 
         }
 
-        private void Form1_Load(object sender, EventArgs e)
-        {
+        private void Lb3_Click(object sender, EventArgs e) { }
 
-        }
+        private void Form1_Load(object sender, EventArgs e) { }
 
         private void BtIniciar1_Click(object sender, EventArgs e)
+
         {
+
             timer1.Start();
+
         }
 
         private void BtParar1_Click(object sender, EventArgs e)
+
         {
+
             timer1.Stop();
+
         }
 
         private void timer1_Tick(object sender, EventArgs e)
+
         {
+
             LbTimer.Text = numeroTimer.ToString();
+
             numeroTimer++;
+
         }
 
         private void BtReiniciar_Click(object sender, EventArgs e)
+
         {
+
             LbTimer.Text = null;
+
         }
+
     }
+
 }
 
 //jogar pra um pdf FEITO
 //jogar pro sqlite
 //colocar o timer pra ir de um segundo aparecer uma quantidade de pontos para ele ir em "tempo real"
-//tirar o timer que eu coloquei que n„o ta sendo usado 
+//tirar o timer que eu coloquei que n√£o ta sendo usado 
 //ver como colocar uma tela de carregamento
 //usar a classe Exam
 
